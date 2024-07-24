@@ -1457,6 +1457,7 @@ int establish_connection(struct perftest_comm *comm)
 
 	if (comm->rdma_params->use_rdma_cm) {
 		if (comm->rdma_params->machine == CLIENT) {
+			/*client执行到对端的连接*/
 			if (rdma_client_connect(comm->rdma_ctx,comm->rdma_params)) {
 				fprintf(stderr," Unable to perform rdma_client function\n");
 				return 1;

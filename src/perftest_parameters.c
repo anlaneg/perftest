@@ -2099,12 +2099,13 @@ enum ctx_device ib_dev_name(struct ibv_context *context)
 	enum ctx_device dev_fname = UNKNOWN;
 	struct ibv_device_attr attr;
 
+	/*获取此设备对应的属性*/
 	if (ibv_query_device(context,&attr)) {
 		dev_fname = DEVICE_ERROR;
 	}
 
 	else if (attr.vendor_id == 5157) {
-
+		/*PCI_VENDOR_ID_CHELSIO是其vendor id*/
 		switch (attr.vendor_part_id >> 12) {
 			case 10 :
 			case 4  : dev_fname = CHELSIO_T4; break;
@@ -2118,6 +2119,7 @@ enum ctx_device ib_dev_name(struct ibv_context *context)
 		If you want Inline support in other vendor devices, please send patch to gilr@dev.mellanox.co.il
 		*/
 	} else if (attr.vendor_id == 0x8086) {
+		/*PCI_VENDOR_ID_INTEL 是其vendor id*/
 		switch (attr.vendor_part_id) {
 			case 14289 : dev_fname = INTEL_GEN1; break;
 			case 5522  : dev_fname = INTEL_GEN2; break;
@@ -2228,7 +2230,7 @@ enum ctx_device ib_dev_name(struct ibv_context *context)
 		}
 	}
 
-	return dev_fname;
+	return dev_fname;/*返回设备对应的功能名称*/
 }
 
 /******************************************************************************
@@ -2291,6 +2293,7 @@ static int set_link_layer(struct ibv_context *context, struct perftest_parameter
 	struct ibv_port_attr port_attr;
 	int8_t curr_link = params->link_type;
 
+	/*查询port属性*/
 	if (ibv_query_port(context, params->ib_port, &port_attr)) {
 		fprintf(stderr, " Unable to query port %d attributes\n", params->ib_port);
 		return FAILURE;
@@ -2302,6 +2305,7 @@ static int set_link_layer(struct ibv_context *context, struct perftest_parameter
 	}
 
 	if (port_attr.state != IBV_PORT_ACTIVE) {
+		/*port没有处于active状态*/
 		fprintf(stderr, " Port number %d state is %s\n"
 				,params->ib_port
 				,portStates[port_attr.state]);
@@ -2819,7 +2823,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 
 		switch (c) {
 			case 'p': CHECK_VALUE(user_param->port,int,"Port",not_int_ptr); break;
-			case 'd': GET_STRING(user_param->ib_devname,strdupa(optarg)); break;
+			case 'd': GET_STRING(user_param->ib_devname,strdupa(optarg));/*使用参数devname*/ break;
 			case 'i': CHECK_VALUE(user_param->ib_port,uint8_t,"IB Port",not_int_ptr);
 				  if (user_param->ib_port < MIN_IB_PORT) {
 					  fprintf(stderr, "IB Port can't be less than %d\n", MIN_IB_PORT);
@@ -2843,6 +2847,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 					  user_param->raw_qos = 1;
 				  break;
 			case 'x': CHECK_VALUE_IN_RANGE_UNS(user_param->gid_index,uint8_t,MIN_GID_IX,MAX_GID_IX,"Gid index",not_int_ptr);
+				  /*指明用户指定了gid*/
 				  user_param->use_gid_user = 1; break;
 			case 'c': change_conn_type(&user_param->connection_type,user_param->verb,optarg); break;
 			case 'q': if (user_param->tst != BW) {

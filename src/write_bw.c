@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 	strncpy(user_param.version, VERSION, sizeof(user_param.version));
 
 	/* Configure the parameters values according to user arguments or default values. */
-	ret_parser = parser(&user_param,argv,argc);
+	ret_parser = parser(&user_param,argv,argc);/*解析参数*/
 	if (ret_parser) {
 		if (ret_parser != VERSION_EXIT && ret_parser != HELP_EXIT)
 			fprintf(stderr," Parser function exited with Error\n");
@@ -78,8 +78,9 @@ int main(int argc, char *argv[])
 	}
 
 	/* Finding the IB device selected (or default if none is selected). */
-	ib_dev = ctx_find_dev(&user_param.ib_devname);
+	ib_dev = ctx_find_dev(&user_param.ib_devname/*如果不指定，默认是NULL，此时默认选首个设备*/);
 	if (!ib_dev) {
+		/*没有找到有效的ib设备*/
 		fprintf(stderr," Unable to find the Infiniband/RoCE device\n");
 		goto return_error;
 	}
@@ -87,6 +88,7 @@ int main(int argc, char *argv[])
 	/* Getting the relevant context from the device */
 	ctx.context = ctx_open_device(ib_dev, &user_param);
 	if (!ctx.context) {
+		/*打开ib设备出错*/
 		fprintf(stderr, " Couldn't get context for the device\n");
 		goto free_devname;
 	}
@@ -95,6 +97,7 @@ int main(int argc, char *argv[])
 	 * the function will print the relevent error info. */
 	if (verify_params_with_device_context(ctx.context, &user_param))
 	{
+		/*这种设备不能支持*/
 		fprintf(stderr, " Couldn't get context for the device\n");
 		goto free_devname;
 	}
@@ -111,6 +114,7 @@ int main(int argc, char *argv[])
 		goto free_devname;
 	}
 
+	/*server显示*/
 	if (user_param.output == FULL_VERBOSITY && user_param.machine == SERVER) {
 		printf("\n************************************\n");
 		printf("* Waiting for client to connect... *\n");

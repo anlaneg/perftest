@@ -947,31 +947,36 @@ struct ibv_device* ctx_find_dev(char **ib_devname)
 	struct ibv_device **dev_list;
 	struct ibv_device *ib_dev = NULL;
 
-	dev_list = ibv_get_device_list(&num_of_device);
+	dev_list = ibv_get_device_list(&num_of_device);/*获取所有ib设备*/
 
 	//coverity[uninit_use]
 	if (num_of_device <= 0) {
+		/*没有找到支持的ib设备*/
 		fprintf(stderr," Did not detect devices \n");
 		fprintf(stderr," If device exists, check if driver is up\n");
 		return NULL;
 	}
 
 	if (!ib_devname) {
+		/*必须提供提供，否则参数无效*/
 		fprintf(stderr," Internal error, existing.\n");
 		return NULL;
 	}
 
 	if (!*ib_devname) {
+		/*如果未指定设备，则默认取首个设备*/
 		ib_dev = dev_list[0];
 		if (!ib_dev) {
 			fprintf(stderr, "No IB devices found\n");
 			exit (1);
 		}
 	} else {
+		/*指定了名称，遍历列表并进行匹配*/
 		for (; (ib_dev = *dev_list); ++dev_list)
 			if (!strcmp(ibv_get_device_name(ib_dev), *ib_devname))
 				break;
 		if (!ib_dev) {
+			/*未在列表中查找到设备*/
 			fprintf(stderr, "IB device %s not found\n", *ib_devname);
 			return NULL;
 		}
@@ -1017,7 +1022,7 @@ struct ibv_context* ctx_open_device(struct ibv_device *ib_dev, struct perftest_p
 	}
 #endif
 
-	context = ibv_open_device(ib_dev);
+	context = ibv_open_device(ib_dev);/*打开指定设备*/
 
 	if (!context) {
 		fprintf(stderr, " Couldn't get context for the device\n");
@@ -2072,7 +2077,7 @@ int create_dmah(struct pingpong_context *ctx, struct perftest_parameters *user_p
 int verify_params_with_device_context(struct ibv_context *context,
 				      struct perftest_parameters *user_param)
 {
-	enum ctx_device current_dev = ib_dev_name(context);
+	enum ctx_device current_dev = ib_dev_name(context);/*设备名称*/
 	if(user_param->use_event) {
 		if(user_param->eq_num > context->num_comp_vectors) {
 			fprintf(stderr, " Completion vector specified is invalid\n");
