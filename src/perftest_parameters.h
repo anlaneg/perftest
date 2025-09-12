@@ -292,7 +292,7 @@
 }
 
 /* Macro for allocating. */
-#define ALLOCATE(var,type,size)                                     \
+#define ALLOCATE(var/*变量名*/,type/*类型名称*/,size/*元素数量*/)   \
 { if((var = (type*)malloc(sizeof(type)*(size))) == NULL)        \
 	{ fprintf(stderr," Cannot Allocate\n"); exit(1);}}
 
@@ -470,12 +470,12 @@ enum gpu_touch_type {
 struct perftest_parameters {
 
 	int				port;
-	char				*ib_devname;
+	char				*ib_devname;/*测试用的ib设备名称*/
 	char				*servername;
 	uint8_t				ib_port;
 	uint8_t				ib_port2;
-	int				mtu;
-	enum ibv_mtu			curr_mtu;
+	int				mtu;/*配置指明的mtu*/
+	enum ibv_mtu			curr_mtu;/*当前生效的mtu*/
 	uint64_t			size;
 	int				req_size;
 	uint64_t			dct_key;
@@ -509,10 +509,10 @@ struct perftest_parameters {
 	uint8_t				remote_ip6[16];
 	uint8_t				local_mac[6];
 	uint8_t				remote_mac[6];
-	uint32_t			client_ip;
-	uint32_t			server_ip;
-	int				is_server_ip;
-	int				is_client_ip;
+	uint32_t			client_ip;/*client地址（ipv4)*/
+	uint32_t			server_ip;/*server地址（ipv4)*/
+	int				is_server_ip;/*标记当前为server*/
+	int				is_client_ip;/*标记当前为client*/
 	uint32_t			local_ip;
 	uint32_t			remote_ip;
 	int				server_port;
@@ -565,7 +565,7 @@ struct perftest_parameters {
 	uint32_t			rem_ud_qkey;
 	int8_t				link_type;
 	int8_t				link_type2;
-	MachineType			machine;
+	MachineType			machine;/*角色（client或者server)*/
 	PrintDataSide			side;
 	VerbType			verb;
 	TestType			tst;
@@ -573,14 +573,14 @@ struct perftest_parameters {
 	TestMethod			test_type;
 	DurationStates			state;
 	int				sockfd;
-	char				version[MAX_VERSION];
-	char				rem_version[MAX_VERSION];
+	char				version[MAX_VERSION];/*本端版本*/
+	char				rem_version[MAX_VERSION];/*远端版本*/
 	cycles_t			*tposted;
 	cycles_t			*tcompleted;
 	int				use_mcg;
-	int 				use_rdma_cm;
+	int 				use_rdma_cm;/*是否带内建连*/
 	int				is_reversed;
-	int				work_rdma_cm;
+	int				work_rdma_cm;/*指明开启rdma cm*/
 	char				*user_mgid;
 	int				buff_size;
 	int             		pkey_index;
@@ -665,8 +665,8 @@ struct perftest_parameters {
 	void 				(*print_eth_func)(void*, struct perftest_parameters*, struct memory_ctx*);
 	int				disable_pcir;
 	struct counter_context		*counter_ctx;
-	char				*source_ip;
-	int 				has_source_ip;
+	char				*source_ip;/*源ip*/
+	int 				has_source_ip;/*是否有源ip*/
 	int 			ah_allocated;
 	int				use_write_with_imm;
 	int				use_unsolicited_write;

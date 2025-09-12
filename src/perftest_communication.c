@@ -496,7 +496,7 @@ static int rdma_write_keys(struct pingpong_dest *my_dest,
 /******************************************************************************
  *
  ******************************************************************************/
-static int rdma_read_keys(struct pingpong_dest *rem_dest,
+static int rdma_read_keys(struct pingpong_dest *rem_dest/*出参，对端发送过来的pingpong_dest结构体*/,
 		struct perftest_comm *comm)
 {
 	#ifdef HAVE_ENDIAN
@@ -506,15 +506,16 @@ static int rdma_read_keys(struct pingpong_dest *rem_dest,
 	int ne;
 
 	do {
-		ne = ibv_poll_cq(comm->rdma_ctx->recv_cq,1,&wc);
+		ne = ibv_poll_cq(comm->rdma_ctx->recv_cq,1,&wc);/*取cq中内容*/
 	} while (ne == 0);
 
 	if (wc.status || !(wc.opcode & IBV_WC_RECV) || wc.wr_id != SYNC_SPEC_ID) {
 		//coverity[uninit_use_in_call]
 		fprintf(stderr, "Bad wc status -- %d -- %d \n",(int)wc.status,(int)wc.wr_id);
-		return 1;
+		return 1;/*内容有误*/
 	}
 
+	/*上面已证明收到了数据，使用数据，拿到发送过来的pingpong_dest内容*/
 	#ifdef HAVE_ENDIAN
 	memcpy(&a_rem_dest,comm->rdma_ctx->buf[0],sizeof(struct pingpong_dest));
 	rem_dest->lid   = ntohl(a_rem_dest.lid);
@@ -529,6 +530,7 @@ static int rdma_read_keys(struct pingpong_dest *rem_dest,
 	memcpy(&rem_dest,comm->rdma_ctx->buf[0],sizeof(struct pingpong_dest));
 	#endif
 
+	/*填写wqe，以便下次收取*/
 	if (post_one_recv_wqe(comm->rdma_ctx)) {
 		fprintf(stderr, "Couldn't post send \n");
 		return 1;
@@ -1014,11 +1016,13 @@ int rdma_client_connect(struct pingpong_context *ctx,struct perftest_parameters 
 			return FAILURE;
 		}
 
+		/*执行地址解析*/
 		if (rdma_resolve_addr(ctx->cm_id, source_ptr, (struct sockaddr *)&sin, 2000)) {
 			fprintf(stderr, "rdma_resolve_addr failed\n");
 			return FAILURE;
 		}
 
+		/*读取kernel产生的event*/
 		if (rdma_get_cm_event(ctx->cm_channel,&event)) {
 			fprintf(stderr, "rdma_get_cm_events failed\n");
 			return FAILURE;
@@ -1062,6 +1066,7 @@ int rdma_client_connect(struct pingpong_context *ctx,struct perftest_parameters 
 			return FAILURE;
 		}
 
+		/*执行路由解析*/
 		if (rdma_resolve_route(ctx->cm_id,2000)) {
 			fprintf(stderr, "rdma_resolve_route failed\n");
 			return FAILURE;
@@ -1114,6 +1119,7 @@ int rdma_client_connect(struct pingpong_context *ctx,struct perftest_parameters 
 		}
 	}
 
+	/*执行到对端的连接*/
 	if (rdma_connect(ctx->cm_id,&conn_param)) {
 		fprintf(stderr, "Function rdma_connect failed\n");
 		return FAILURE;
@@ -1195,6 +1201,7 @@ int rdma_server_connect(struct pingpong_context *ctx,
 	struct addrinfo hints;
 	char *service;
 	struct sockaddr_storage sin;
+	/*指定源ip时，使用源ip,不指定源ip时使用NULL*/
 	char* src_ip = user_param->has_source_ip ? user_param->source_ip : NULL;
 
 	memset(&hints, 0, sizeof hints);
@@ -1213,6 +1220,7 @@ int rdma_server_connect(struct pingpong_context *ctx,
 		return FAILURE;
 	}
 
+	/*设置sin*/
 	if (res->ai_addr->sa_family == AF_INET) {
 		memcpy(&sin, res->ai_addr, sizeof(struct sockaddr_in));
 	}
@@ -1220,14 +1228,17 @@ int rdma_server_connect(struct pingpong_context *ctx,
 		memcpy(&sin, res->ai_addr, sizeof(struct sockaddr_in6));
 	}
 
+	/*填充sin地址对应的port*/
 	sockaddr_set_port((struct sockaddr *)&sin, (unsigned short)user_param->port);
 	freeaddrinfo(res);
 
+	/*bind源ip*/
 	if (rdma_bind_addr(ctx->cm_id_control, (struct sockaddr *)&sin)) {
 		fprintf(stderr," rdma_bind_addr failed\n");
 		return 1;
 	}
 
+	/*发送listen命令*/
 	if (rdma_listen(ctx->cm_id_control, user_param->num_of_qps)) {
 		fprintf(stderr, "rdma_listen failed\n");
 		return 1;
@@ -1294,6 +1305,7 @@ int rdma_server_connect(struct pingpong_context *ctx,
 		return FAILURE;
 	}
 
+	/*发送accept命令*/
 	if (rdma_accept(ctx->cm_id, &conn_param)) {
 		fprintf(stderr, "Function rdma_accept failed\n");
 		return 1;
@@ -1456,6 +1468,7 @@ int establish_connection(struct perftest_comm *comm)
 {
 
 	if (comm->rdma_params->use_rdma_cm) {
+		/*指明采用带内建连方式*/
 		if (comm->rdma_params->machine == CLIENT) {
 			/*client执行到对端的连接*/
 			if (rdma_client_connect(comm->rdma_ctx,comm->rdma_params)) {
@@ -1463,6 +1476,7 @@ int establish_connection(struct perftest_comm *comm)
 				return 1;
 			}
 		} else {
+			/*server端执行*/
 			if (rdma_server_connect(comm->rdma_ctx,comm->rdma_params)) {
 				fprintf(stderr," Unable to perform rdma_server function\n");
 				return 1;
@@ -1490,7 +1504,9 @@ int ctx_hand_shake(struct perftest_comm *comm,
 	int (*read_func_ptr) (struct pingpong_dest*,struct perftest_comm*);
 	int (*write_func_ptr)(struct pingpong_dest*,struct perftest_comm*);
 
+	/*设置读写函数*/
 	if (comm->rdma_params->use_rdma_cm || comm->rdma_params->work_rdma_cm) {
+		/*使用cm时使用下列参数*/
 		read_func_ptr  = &rdma_read_keys;
 		write_func_ptr = &rdma_write_keys;
 
@@ -1502,6 +1518,7 @@ int ctx_hand_shake(struct perftest_comm *comm,
 
 	rem_dest->gid_index = my_dest->gid_index;
 	if (comm->rdma_params->servername) {
+		/*客户端，先写后读*/
 		if ((*write_func_ptr)(my_dest,comm)) {
 			fprintf(stderr," Unable to write to socket/rdma_cm\n");
 			return 1;
@@ -1513,7 +1530,7 @@ int ctx_hand_shake(struct perftest_comm *comm,
 
 		/*Server side will wait for the client side to reach the write function.*/
 	} else {
-
+		/*服务端，先读后写*/
 		if ((*read_func_ptr)(rem_dest,comm)) {
 			fprintf(stderr," Unable to read to socket/rdma_cm\n");
 			return 1;
@@ -1569,10 +1586,11 @@ int ctx_xchg_data_ethernet( struct perftest_comm *comm,
  *
  ******************************************************************************/
 int ctx_xchg_data_rdma( struct perftest_comm *comm,
-		void *my_data,
-		void *rem_data,int size)
+		void *my_data/*本端数据*/,
+		void *rem_data/*远端数据*/,int size/*数据长度*/)
 {
 	if (comm->rdma_params->servername) {
+		/*客户端，通过先写后读完成交换*/
 		if (rdma_write_data(my_data,comm,size)) {
 			fprintf(stderr," Unable to write to socket/rdma_cm\n");
 			return 1;
@@ -1585,7 +1603,7 @@ int ctx_xchg_data_rdma( struct perftest_comm *comm,
 
 		/*Server side will wait for the client side to reach the write function.*/
 	} else {
-
+		/*服务端，通过先读后写完成交换*/
 		if (rdma_read_data(rem_data,comm,size)) {
 			fprintf(stderr," Unable to read to socket/rdma_cm\n");
 			return 1;
@@ -1610,18 +1628,18 @@ int rdma_read_data(void *data,
 	int ne;
 
 	do {
-		ne = ibv_poll_cq(comm->rdma_ctx->recv_cq,1,&wc);
+		ne = ibv_poll_cq(comm->rdma_ctx->recv_cq,1,&wc);/*检查recv_cq,等待数据*/
 	} while (ne == 0);
 
 	if (wc.status || !(wc.opcode & IBV_WC_RECV) || wc.wr_id != SYNC_SPEC_ID) {
 		//coverity[uninit_use_in_call]
 		fprintf(stderr, "Bad wc status -- %d -- %d \n",(int)wc.status,(int)wc.wr_id);
-		return 1;
+		return 1;/*数据有误*/
 	}
 
-	memcpy(data,comm->rdma_ctx->buf[0], size);
+	memcpy(data,comm->rdma_ctx->buf[0], size);/*自mr中复制数据*/
 
-	if (post_one_recv_wqe(comm->rdma_ctx)) {
+	if (post_one_recv_wqe(comm->rdma_ctx)) {/*为队列中补充buffer,还使用上面的mr*/
 		fprintf(stderr, "Couldn't post send \n");
 		return 1;
 	}
@@ -1632,7 +1650,7 @@ int rdma_read_data(void *data,
 /******************************************************************************
  *
  ******************************************************************************/
-int rdma_write_data(void *data,
+int rdma_write_data(void *data/*要写的数据*/,
 		struct perftest_comm *comm, int size)
 {
 	struct ibv_send_wr wr;
@@ -1640,7 +1658,7 @@ int rdma_write_data(void *data,
 	struct ibv_sge list;
 	struct ibv_wc wc;
 	int ne;
-	memcpy(comm->rdma_ctx->buf[0],data,size);
+	memcpy(comm->rdma_ctx->buf[0],data,size);/*将数据写入到mr*/
 
 	list.addr   = (uintptr_t)comm->rdma_ctx->buf[0];
 	list.length = size;
@@ -1649,26 +1667,26 @@ int rdma_write_data(void *data,
 	wr.wr_id      = SYNC_SPEC_ID;
 	wr.sg_list    = &list;
 	wr.num_sge    = 1;
-	wr.opcode     = IBV_WR_SEND;
+	wr.opcode     = IBV_WR_SEND;/*指明通过send*/
 	wr.send_flags = IBV_SEND_SIGNALED;
 	wr.next       = NULL;
 
-	if (ibv_post_send(comm->rdma_ctx->qp[0],&wr,&bad_wr)) {
+	if (ibv_post_send(comm->rdma_ctx->qp[0],&wr,&bad_wr)) {/*发送*/
 		fprintf(stderr, "Function ibv_post_send failed\n");
 		return 1;
 	}
 
 	do {
 		ne = ibv_poll_cq(comm->rdma_ctx->send_cq, 1,&wc);
-	} while (ne == 0);
+	} while (ne == 0);/*等发送完成*/
 
 	//coverity[uninit_use]
 	if (wc.status || wc.opcode != IBV_WC_SEND || wc.wr_id != SYNC_SPEC_ID) {
 		fprintf(stderr, " Bad wc status %d\n",(int)wc.status);
-		return 1;
+		return 1;/*发送失败*/
 	}
 
-	return 0;
+	return 0;/*发送成功*/
 }
 
 /******************************************************************************
@@ -1703,10 +1721,11 @@ int ethernet_read_data(struct perftest_comm *comm, char *recv_msg, size_t size)
  *
  ******************************************************************************/
 int ctx_xchg_data( struct perftest_comm *comm,
-		void *my_data,
-		void *rem_data,int size)
+		void *my_data/*本端数据*/,
+		void *rem_data/*远端数据*/,int size/*数据长度*/)
 {
 	if (comm->rdma_params->use_rdma_cm || comm->rdma_params->work_rdma_cm) {
+		/*cm情况下数据交换*/
 		if (ctx_xchg_data_rdma(comm,my_data,rem_data,size))
 			return 1;
 	} else {
@@ -1887,6 +1906,7 @@ int ctx_close_connection(struct perftest_comm *comm,
 void exchange_versions(struct perftest_comm *user_comm, struct perftest_parameters *user_param)
 {
 	if (!user_param->dont_xchg_versions) {
+		/*如未明确指明不交换版本，则这里执行版本交换*/
 		if (ctx_xchg_data(user_comm,(void*)(&user_param->version),(void*)(&user_param->rem_version),sizeof(user_param->rem_version))) {
 			fprintf(stderr," Failed to exchange data between server and clients\n");
 			exit(1);
@@ -1901,6 +1921,7 @@ void check_version_compatibility(struct perftest_parameters *user_param)
 {
 	if ((atof(user_param->rem_version) < 5.70))
 	{
+		/*远端版本过小*/
 		fprintf(stderr, "Current implementation is not compatible with versions older than 5.70\n");
 		exit(1);
 	}
@@ -1923,6 +1944,7 @@ void check_sys_data(struct perftest_comm *user_comm, struct perftest_parameters 
 	}
 
 	if (!user_param->dont_xchg_versions) {
+		/*交换cycle_buffer，cache_line_size*/
 		if (ctx_xchg_data(user_comm,(void*)(&m_cycle_buffer),(void*)(&rem_cycle_buffer), sizeof(user_param->cycle_buffer))) {
 			fprintf(stderr," Failed to exchange Page Size data between server and client\n");
 			exit(1);
@@ -1936,6 +1958,7 @@ void check_sys_data(struct perftest_comm *user_comm, struct perftest_parameters 
 	rem_cycle_buffer = ntoh_int(rem_cycle_buffer);
 	rem_cache_line_size = ntoh_int(rem_cache_line_size);
 
+	/*比较两端，以最大的为准*/
 	/*take the max and update user_param*/
 	user_param->cycle_buffer = (rem_cycle_buffer > user_param->cycle_buffer) ? rem_cycle_buffer : user_param->cycle_buffer;
 	user_param->cache_line_size = (rem_cache_line_size > user_param->cache_line_size) ? rem_cache_line_size : user_param->cache_line_size;
@@ -1963,7 +1986,8 @@ int check_mtu(struct ibv_context *context,struct perftest_parameters *user_param
 			return FAILURE;
 		}
 	} else {
-		curr_mtu = (int) (set_mtu(context,user_param->ib_port,user_param->mtu));
+		/*设置mtu*/
+		curr_mtu = (int) (set_mtu(context,user_param->ib_port,user_param->mtu));/*返回生效的mtu*/
 		if (!user_param->dont_xchg_versions) {
 			/*add mtu set in remote node from version 5.1 and above*/
 			if (rem_vers >= 5.1 ) {
@@ -1972,14 +1996,16 @@ int check_mtu(struct ibv_context *context,struct perftest_parameters *user_param
 				/*fix a buffer overflow issue in ppc.*/
 				size_of_cur = (rem_vers >= 5.31) ? sizeof(char[2]) : sizeof(int);
 
+				/*互换两边的mtu*/
 				if (ctx_xchg_data(user_comm,(void*)(cur),(void*)(rem),size_of_cur)) {
 					fprintf(stderr," Failed to exchange data between server and clients\n");
 					exit(1);
 				}
+				/*使用两端mtu中最小的一个*/
 				rem_mtu = (int) strtol(rem, (char **)NULL, 10);
 				user_param->curr_mtu = (enum ibv_mtu)((valid_mtu_size(rem_mtu) && (curr_mtu > rem_mtu)) ? rem_mtu : curr_mtu);
 			} else {
-				user_param->curr_mtu = (enum ibv_mtu)(curr_mtu);
+				user_param->curr_mtu = (enum ibv_mtu)(curr_mtu);/*不交换情况下，以本端mtu为准*/
 			}
 		} else {
 			user_param->curr_mtu = (enum ibv_mtu)(curr_mtu);
@@ -2105,7 +2131,7 @@ int ctx_check_gid_compatibility(struct pingpong_dest *my_dest,
 *
 ******************************************************************************/
 int rdma_cm_get_rdma_address(struct perftest_parameters *user_param,
-		struct rdma_addrinfo *hints, struct rdma_addrinfo **rai)
+		struct rdma_addrinfo *hints, struct rdma_addrinfo **rai/*出参，解析的地址*/)
 {
 	int rc;
 	char port[6] = "", error_message[ERROR_MSG_SIZE] = "";
@@ -2603,10 +2629,11 @@ int rdma_cm_event_error_handler(struct pingpong_context *ctx,
 {
 	char error_message[ERROR_MSG_SIZE] = "";
 
+	/*格式化event名称及状态码*/
 	sprintf(error_message, "RDMA CM event error:\nEvent: %s; error: %d.\n",
 		rdma_event_str(event->event), event->status);
 	rdma_cm_connect_error(ctx);
-	return error_handler(error_message);
+	return error_handler(error_message);/*显示错误信息*/
 }
 
 /******************************************************************************
@@ -2644,6 +2671,7 @@ int rdma_cm_events_dispatcher(struct pingpong_context *ctx,
 	case RDMA_CM_EVENT_CONNECT_ERROR:
 	case RDMA_CM_EVENT_UNREACHABLE:
 	case RDMA_CM_EVENT_REJECTED:
+		/*错误event处理*/
 		rc = rdma_cm_event_error_handler(ctx, event);
 		break;
 	case RDMA_CM_EVENT_DISCONNECTED:
@@ -2761,6 +2789,7 @@ int rdma_cm_server_connection(struct pingpong_context *ctx,
 	char error_message[ERROR_MSG_SIZE] = "";
 	struct rdma_cm_id *listen_id;
 
+	/*创建listen_id*/
 	rc = rdma_create_id(ctx->cma_master.channel, &listen_id, &ctx->cma_master,
 		hints->ai_port_space);
 	if (rc) {
@@ -2828,6 +2857,7 @@ int _rdma_cm_client_connection(struct pingpong_context *ctx,
 	}
 
 	for (i = 0; i < user_param->num_of_qps; i++) {
+		/*解释地址*/
 		rc = rdma_resolve_addr(ctx->cma_master.nodes[i].cma_id,
 			ctx->cma_master.rai->ai_src_addr,
 			ctx->cma_master.rai->ai_dst_addr, 2000);
@@ -2856,15 +2886,16 @@ error:
 int rdma_cm_client_connection(struct pingpong_context *ctx,
 		struct perftest_parameters *user_param, struct rdma_addrinfo *hints)
 {
-	int i, rc, max_retries = 10, delay = 100000;
+	int i, rc, max_retries = 10/*最大尝试10次*/, delay = 100000/*延迟100ms*/;
 	char error_message[ERROR_MSG_SIZE] = "";
 
 	for (i = 0; i < max_retries; i++) {
 		rc = _rdma_cm_client_connection(ctx, user_param, hints);
 		if (!rc) {
-			return rc;
+			return rc;/*连接成功，返回*/
 		}
 
+		/*连接不成功，释放掉刚创建的cma_id*/
 		rc = rdma_cm_destroy_cma(ctx, user_param);
 		if (rc) {
 			sprintf(error_message, "Failed to destroy RDMA CM contexts.");
@@ -2885,7 +2916,7 @@ error:
 ******************************************************************************/
 int create_rdma_cm_connection(struct pingpong_context *ctx,
 		struct perftest_parameters *user_param, struct perftest_comm *comm,
-		struct pingpong_dest *my_dest, struct pingpong_dest *rem_dest)
+		struct pingpong_dest *my_dest/*本端信息*/, struct pingpong_dest *rem_dest/*远端信息*/)
 {
 	int i;
 	int rc;
@@ -2894,6 +2925,7 @@ int create_rdma_cm_connection(struct pingpong_context *ctx,
 	memset(&hints, 0, sizeof(hints));
 	ctx->cma_master.connects_left = user_param->num_of_qps;
 
+	/*创建event channel*/
 	ctx->cma_master.channel = rdma_create_event_channel();
 	if (!ctx->cma_master.channel) {
 		error_message = "Failed to create RDMA CM event channel.";
@@ -2906,6 +2938,7 @@ int create_rdma_cm_connection(struct pingpong_context *ctx,
 		goto destroy_event_channel;
 	}
 
+	/*client与server端互换信息*/
 	rc = ctx_hand_shake(comm, &my_dest[0], &rem_dest[0]);
 	if (rc) {
 		error_message = "Failed to sync between client and server "
@@ -2914,8 +2947,10 @@ int create_rdma_cm_connection(struct pingpong_context *ctx,
 	}
 
 	if (user_param->machine == CLIENT) {
+		/*客户端*/
 		rc = rdma_cm_client_connection(ctx, user_param, &hints);
 	} else {
+		/*server端连接*/
 		rc = rdma_cm_server_connection(ctx, user_param, &hints);
 	}
 

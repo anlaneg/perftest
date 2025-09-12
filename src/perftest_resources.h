@@ -154,7 +154,7 @@ struct cma_node {
 	struct rdma_cm_id *cma_id;
 	uint32_t remote_qpn;
 	uint32_t remote_qkey;
-	int id;
+	int id;/*编号*/
 	int connected;
 };
 
@@ -187,8 +187,8 @@ struct pingpong_context {
 	struct ibv_pd				*pad;
 	struct ibv_mr				**mr;
 	struct ibv_mr				*null_mr;
-	struct ibv_cq				*send_cq;
-	struct ibv_cq				*recv_cq;
+	struct ibv_cq				*send_cq;/*发送用的cq*/
+	struct ibv_cq				*recv_cq;/*接收用的cq*/
 	void					**buf;
 	struct ibv_ah				**ah;
 	struct ibv_qp				**qp;

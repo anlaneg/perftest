@@ -860,15 +860,17 @@ int check_add_port(char **service,int port,
 {
 	int number;
 
+	/*端口转为字符串*/
 	if (asprintf(service,"%d", port) < 0) {
 		return FAILURE;
 	}
 
-	number = getaddrinfo(servername,*service,hints,res);
+	number = getaddrinfo(servername/*主机名*/,*service/*服务名称*/,hints,res);
 
 	free(*service);
 
 	if (number < 0) {
+		/*解析出错*/
 		fprintf(stderr, "%s for ai_family: %x service: %s port: %d\n",
 				gai_strerror(number), hints->ai_family, servername, port);
 		return FAILURE;
@@ -1022,7 +1024,8 @@ struct ibv_context* ctx_open_device(struct ibv_device *ib_dev, struct perftest_p
 	}
 #endif
 
-	context = ibv_open_device(ib_dev);/*打开指定设备*/
+	/*打开指定设备，获得此设备对应的context*/
+	context = ibv_open_device(ib_dev);
 
 	if (!context) {
 		fprintf(stderr, " Couldn't get context for the device\n");
@@ -2077,7 +2080,7 @@ int create_dmah(struct pingpong_context *ctx, struct perftest_parameters *user_p
 int verify_params_with_device_context(struct ibv_context *context,
 				      struct perftest_parameters *user_param)
 {
-	enum ctx_device current_dev = ib_dev_name(context);/*设备名称*/
+	enum ctx_device current_dev = ib_dev_name(context);/*取设备硬件名称*/
 	if(user_param->use_event) {
 		if(user_param->eq_num > context->num_comp_vectors) {
 			fprintf(stderr, " Completion vector specified is invalid\n");
@@ -2109,6 +2112,7 @@ int verify_params_with_device_context(struct ibv_context *context,
 		current_dev != YUNSILICON_DIAMOND&&
 		current_dev != YUNSILICON_DIAMOND_NEXT)
 	{
+		/*非以上设备必须使用旧的post_send*/
 		if (!user_param->use_old_post_send)
 		{
 			user_param->use_old_post_send = 1;
@@ -5783,24 +5787,29 @@ int rdma_cm_allocate_nodes(struct pingpong_context *ctx,
 
 	if (user_param->connection_type == UD
 		|| user_param->connection_type == RawEth)
+		/*ud,rawEth采用udp协议*/
 		hints->ai_port_space = RDMA_PS_UDP;
 	else
+		/*采用tcp协议*/
 		hints->ai_port_space = RDMA_PS_TCP;
 
+	/*申请num_of_qps个struct cma_node*/
 	ALLOCATE(ctx->cma_master.nodes, struct cma_node, user_param->num_of_qps);
 	if (!ctx->cma_master.nodes) {
 		error_message = "Failed to allocate memory for RDMA CM nodes.";
 		goto error;
 	}
 
+	/*清空为0*/
 	memset(ctx->cma_master.nodes, 0,
 		(sizeof *ctx->cma_master.nodes) * user_param->num_of_qps);
 
 	for (i = 0; i < user_param->num_of_qps; i++) {
 		ctx->cma_master.nodes[i].id = i;
 		if (user_param->machine == CLIENT) {
+			/*向rdma_cm字符设备发送消息，创建ucma_context，设置其关联的cma_id*/
 			rc = rdma_create_id(ctx->cma_master.channel,
-				&ctx->cma_master.nodes[i].cma_id, NULL, hints->ai_port_space);
+				&ctx->cma_master.nodes[i].cma_id/*出参，此qp对应的cma_id*/, NULL, hints->ai_port_space);
 			if (rc) {
 				error_message = "Failed to create RDMA CM ID.";
 				goto error;
@@ -5846,6 +5855,7 @@ int rdma_cm_allocate_nodes(struct pingpong_context *ctx,
 
 error:
 	while (--i >= 0) {
+		/*释放已经创建成功的cma_id*/
 		rc = rdma_destroy_id(ctx->cma_master.nodes[i].cma_id);
 		if (rc) {
 			error_message = "Failed to destroy RDMA CM ID.";
@@ -5884,8 +5894,8 @@ int rdma_cm_destroy_cma(struct pingpong_context *ctx,
 	struct cma_node *cm_node;
 
 	for (i = 0; i < user_param->num_of_qps; i++) {
-		cm_node = &ctx->cma_master.nodes[i];
-		rc = rdma_destroy_id(cm_node->cma_id);
+		cm_node = &ctx->cma_master.nodes[i];/*取得此qp的cma_id*/
+		rc = rdma_destroy_id(cm_node->cma_id);/*释放此cma_id*/
 		if (rc) {
 			sprintf(error_message,
 				"Failed to destroy RDMA CM ID number %d.", i);

@@ -2241,6 +2241,7 @@ enum ibv_mtu set_mtu(struct ibv_context *context,uint8_t ib_port,int user_mtu)
 	struct ibv_port_attr port_attr;
 	enum ibv_mtu curr_mtu;
 
+	/*查询ib_port的属性*/
 	if (ibv_query_port(context,ib_port,&port_attr)) {
 		fprintf(stderr," Error when trying to query port\n");
 		exit(1);
@@ -2248,6 +2249,7 @@ enum ibv_mtu set_mtu(struct ibv_context *context,uint8_t ib_port,int user_mtu)
 
 	/* User did not ask for specific mtu. */
 	if (user_mtu == 0) {
+		/*未指明mtu时*/
 		enum ctx_device current_dev = ib_dev_name(context);
 		curr_mtu = port_attr.active_mtu;
 		/* CX3_PRO and CX3 have a HW bug in 4K MTU, so we're forcing it to be 2K MTU */
@@ -2271,6 +2273,7 @@ enum ibv_mtu set_mtu(struct ibv_context *context,uint8_t ib_port,int user_mtu)
 		}
 
 		if (curr_mtu > port_attr.active_mtu) {
+			/*当指定的mtu比端口活跃的mtu大时，更新为端口active的mtu并告警*/
 			fprintf(stdout,"Requested mtu is higher than active mtu \n");
 			fprintf(stdout,"Changing to active mtu - %d\n",port_attr.active_mtu);
 			curr_mtu = port_attr.active_mtu;
@@ -2607,8 +2610,8 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 	static int processing_hints_flag = 0;
 	#endif
 
-	char *server_ip = NULL;
-	char *client_ip = NULL;
+	char *server_ip = NULL;/*指定server端ip*/
+	char *client_ip = NULL;/*指定客户端ip*/
 	char *local_ip = NULL;
 	char *remote_ip = NULL;
 	char *not_int_ptr = NULL;
@@ -2624,7 +2627,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 		int long_option_index = -1;
 		static const struct option long_options[] = {
 			{ .name = "port",		.has_arg = 1, .val = 'p' },
-			{ .name = "ib-dev",		.has_arg = 1, .val = 'd' },
+			{ .name = "ib-dev",		.has_arg = 1, .val = 'd' },/*指定ib设备*/
 			{ .name = "ib-port",		.has_arg = 1, .val = 'i' },
 			{ .name = "mtu",		.has_arg = 1, .val = 'm' },
 			{ .name = "size",		.has_arg = 1, .val = 's' },
@@ -2643,7 +2646,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 			{ .name = "outs",		.has_arg = 1, .val = 'o' },
 			{ .name = "mcg",		.has_arg = 0, .val = 'g' },
 			{ .name = "comm_rdma_cm",	.has_arg = 0, .val = 'z' },
-			{ .name = "rdma_cm",		.has_arg = 0, .val = 'R' },
+			{ .name = "rdma_cm",		.has_arg = 0, .val = 'R' },/*指明采用cm建连*/
 			{ .name = "tos",		.has_arg = 1, .val = 'T' },
 			{ .name = "hop_limit",		.has_arg = 1, .val = 'L' },
 			{ .name = "help",		.has_arg = 0, .val = 'h' },
@@ -2664,7 +2667,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 			{ .name = "source_mac",		.has_arg = 1, .val = 'B' },
 			{ .name = "dest_mac",		.has_arg = 1, .val = 'E' },
 			{ .name = "dest_ip",		.has_arg = 1, .val = 'J' },
-			{ .name = "source_ip",		.has_arg = 1, .val = 'j' },
+			{ .name = "source_ip",		.has_arg = 1, .val = 'j' },/*指定源ip地址*/
 			{ .name = "dest_port",		.has_arg = 1, .val = 'K' },
 			{ .name = "source_port",	.has_arg = 1, .val = 'k' },
 			{ .name = "ethertype",		.has_arg = 1, .val = 'Y' },
@@ -2796,6 +2799,8 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 			ALLOCATE(duplicates_checker, int, size_long_options);
 			memset(duplicates_checker, 0, size_long_options * sizeof(int));
 		}
+
+		/*解析参数*/
 		c = getopt_long(argc,argv,"w:y:p:d:i:m:s:n:t:u:S:x:c:q:I:o:M:r:Q:A:l:D:f:B:T:L:E:J:j:K:k:X:W:aFegzRvhbNVCHUOZP",long_options, &long_option_index);
 
 		/* c == 0: the argumenet is a long option (example: --report_gbits) */
@@ -2821,6 +2826,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 		if (c == -1)
 			break;
 
+		/*检查选项*/
 		switch (c) {
 			case 'p': CHECK_VALUE(user_param->port,int,"Port",not_int_ptr); break;
 			case 'd': GET_STRING(user_param->ib_devname,strdupa(optarg));/*使用参数devname*/ break;
@@ -2921,7 +2927,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 				  }
 				  return HELP_EXIT;
 			case 'z': user_param->use_rdma_cm = ON; break;
-			case 'R': user_param->work_rdma_cm = ON; break;
+			case 'R': user_param->work_rdma_cm = ON; break;/*指明开启cm*/
 			case 's': size_len = (int)strlen(optarg);
 				  if (optarg[size_len-1] == 'K') {
 					  optarg[size_len-1] = '\0';
@@ -3013,13 +3019,13 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 				  } break;
 			case 'J':
 				  user_param->is_old_raw_eth_param = 1;
-				  user_param->is_server_ip = ON;
+				  user_param->is_server_ip = ON;/*指明开启server-ip*/
 				  server_ip = optarg;
 				  break;
 			case 'j':
 				  user_param->is_old_raw_eth_param = 1;
 				  user_param->is_client_ip = ON;
-				  client_ip = optarg;
+				  client_ip = optarg;/*指定client端ip*/
 				  break;
 			case 'K':
 				  user_param->is_old_raw_eth_param = 1;
@@ -3683,6 +3689,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 			}
 		} else {
 			if (user_param->is_server_ip) {
+				/*解析server ipv6*/
 				if(1 != parse_ip6_from_str(server_ip,
 							  (struct in6_addr *)&(user_param->server_ip6))) {
 					fprintf(stderr," Invalid server IP address\n");
@@ -3690,6 +3697,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 				}
 			}
 			if (user_param->is_client_ip) {
+				/*解析client ipv6*/
 				if(1 != parse_ip6_from_str(client_ip,
 							  (struct in6_addr *)&(user_param->client_ip6))) {
 					fprintf(stderr," Invalid client IP address\n");
@@ -3716,6 +3724,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 			}
 		} else {
 			if (user_param->is_server_ip) {
+				/*解析server ipv4地址*/
 				if(1 != parse_ip_from_str(server_ip,
 							  &(user_param->server_ip))) {
 					fprintf(stderr," Invalid server IP address\n");
@@ -3723,6 +3732,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 				}
 			}
 			if (user_param->is_client_ip) {
+				/*解析client ipv4地址*/
 				if(1 != parse_ip_from_str(client_ip,
 							  &(user_param->client_ip))) {
 					fprintf(stderr," Invalid client IP address\n");

@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
 		goto free_devname;
 	}
 
-	/*server显示*/
+	/*server端显示待连接*/
 	if (user_param.output == FULL_VERBOSITY && user_param.machine == SERVER) {
 		printf("\n************************************\n");
 		printf("* Waiting for client to connect... *\n");
@@ -139,9 +139,10 @@ int main(int argc, char *argv[])
 		goto free_devname;
 	}
 
-	MAIN_ALLOC(my_dest , struct pingpong_dest , user_param.num_of_qps , free_rdma_params);
+	/*准备my_dest,rem_dest*/
+	MAIN_ALLOC(my_dest , struct pingpong_dest , user_param.num_of_qps/*申请的结构体数目*/, free_rdma_params);
 	memset(my_dest, 0, sizeof(struct pingpong_dest)*user_param.num_of_qps);
-	MAIN_ALLOC(rem_dest , struct pingpong_dest , user_param.num_of_qps , free_my_dest);
+	MAIN_ALLOC(rem_dest , struct pingpong_dest , user_param.num_of_qps/*申请的结构体数目*/, free_my_dest);
 	memset(rem_dest, 0, sizeof(struct pingpong_dest)*user_param.num_of_qps);
 
 	/* Allocating arrays needed for the test. */
@@ -152,6 +153,7 @@ int main(int argc, char *argv[])
 
 	/* Create RDMA CM resources and connect through CM. */
 	if (user_param.work_rdma_cm == ON) {
+		/*创建cm连接*/
 		rc = create_rdma_cm_connection(&ctx, &user_param, &user_comm,
 			my_dest, rem_dest);
 		if (rc) {
