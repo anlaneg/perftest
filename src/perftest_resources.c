@@ -2392,7 +2392,8 @@ int ctx_init(struct pingpong_context *ctx, struct perftest_parameters *user_para
 		return SUCCESS;
 
 	for (i=0; i < user_param->num_of_qps; i++) {
-		if (create_qp_main(ctx, user_param, i)) {
+		/*创建I号QP*/
+		if (create_qp_main(ctx, user_param, i/*QP序号*/)) {
 			fprintf(stderr, "Failed to create QP.\n");
 			goto qps;
 		}
@@ -2496,16 +2497,17 @@ int modify_qp_to_init(struct pingpong_context *ctx,
  ******************************************************************************/
 int create_reg_qp_main(struct pingpong_context *ctx,
 				struct perftest_parameters *user_param,
-				int i)
+				int i/*连接索引*/)
 {
 	if (user_param->use_xrc) {
 		#ifdef HAVE_XRCD
 		ctx->qp[i] = ctx_xrc_qp_create(ctx, user_param, i);
 		#endif
 	} else {
-		ctx->qp[i] = ctx_qp_create(ctx, user_param, i);
+		ctx->qp[i] = ctx_qp_create(ctx, user_param, i);/*创建qp*/
 	}
 
+	/*创建QP失败*/
 	if (ctx->qp[i] == NULL) {
 		fprintf(stderr, "Unable to create QP.\n");
 		return FAILURE;
@@ -2531,7 +2533,7 @@ int create_reg_qp_main(struct pingpong_context *ctx,
 }
 
 int create_qp_main(struct pingpong_context *ctx,
-		struct perftest_parameters *user_param, int i)
+		struct perftest_parameters *user_param, int i/*连接索引*/)
 {
 	int ret;
 	ret = create_reg_qp_main(ctx, user_param, i);
@@ -2539,7 +2541,7 @@ int create_qp_main(struct pingpong_context *ctx,
 }
 
 struct ibv_qp* ctx_qp_create(struct pingpong_context *ctx,
-		struct perftest_parameters *user_param, int qp_index)
+		struct perftest_parameters *user_param, int qp_index/*QP序号*/)
 {
 	struct ibv_qp* qp = NULL;
 	int dc_num_of_qps = user_param->num_of_qps / 2;
@@ -5779,7 +5781,7 @@ cleaning:
 /******************************************************************************
 *
 ******************************************************************************/
-int rdma_cm_allocate_nodes(struct pingpong_context *ctx,
+int rdma_cm_allocate_nodes(struct pingpong_context *ctx/*入出参*/,
 	struct perftest_parameters *user_param, struct rdma_addrinfo *hints)
 {
 	int rc = SUCCESS, i = 0;
@@ -5804,12 +5806,13 @@ int rdma_cm_allocate_nodes(struct pingpong_context *ctx,
 	memset(ctx->cma_master.nodes, 0,
 		(sizeof *ctx->cma_master.nodes) * user_param->num_of_qps);
 
+	/*针对每个QP创建其对应的cma_id*/
 	for (i = 0; i < user_param->num_of_qps; i++) {
 		ctx->cma_master.nodes[i].id = i;
 		if (user_param->machine == CLIENT) {
 			/*向rdma_cm字符设备发送消息，创建ucma_context，设置其关联的cma_id*/
 			rc = rdma_create_id(ctx->cma_master.channel,
-				&ctx->cma_master.nodes[i].cma_id/*出参，此qp对应的cma_id*/, NULL, hints->ai_port_space);
+				&ctx->cma_master.nodes[i].cma_id/*出参，此qp对应的cma_id*/, NULL/*关联的ctx为空*/, hints->ai_port_space);
 			if (rc) {
 				error_message = "Failed to create RDMA CM ID.";
 				goto error;
@@ -5818,7 +5821,9 @@ int rdma_cm_allocate_nodes(struct pingpong_context *ctx,
 	}
 
 	if (user_param->has_source_ip) {
+		/*指明了源IP*/
 		if (AF_INET == user_param->ai_family) {
+			/*源IP为IPV4的情况*/
 			struct sockaddr_in *source_addr;
 			source_addr = calloc(1, sizeof(*source_addr));
 			source_addr->sin_family = AF_INET;
@@ -5832,6 +5837,7 @@ int rdma_cm_allocate_nodes(struct pingpong_context *ctx,
 			hints->ai_src_addr = (struct sockaddr *)(source_addr);
 			hints->ai_src_len = sizeof(*source_addr);
 		} else {
+			/*源地址为IPV6情况*/
 			int err = 0;
 			struct sockaddr_in6 *source_addr;
 			source_addr = calloc(1, sizeof(*source_addr));

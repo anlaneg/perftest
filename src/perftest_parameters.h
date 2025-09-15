@@ -529,7 +529,7 @@ struct perftest_parameters {
 	int				cpu_freq_f;
 	int				connection_type;
 	int				use_null_mr;
-	int				num_of_qps;
+	int				num_of_qps;/*QP数目*/
 	int				use_event;
 	int				eq_num;
 	int				use_eq_num;
@@ -666,7 +666,7 @@ struct perftest_parameters {
 	int				disable_pcir;
 	struct counter_context		*counter_ctx;
 	char				*source_ip;/*源ip*/
-	int 				has_source_ip;/*是否有源ip*/
+	int 				has_source_ip;/*是否指定源ip*/
 	int 			ah_allocated;
 	int				use_write_with_imm;
 	int				use_unsolicited_write;

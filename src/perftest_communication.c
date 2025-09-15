@@ -475,13 +475,13 @@ static int rdma_write_keys(struct pingpong_dest *my_dest,
 	wr.send_flags = IBV_SEND_SIGNALED;
 	wr.next       = NULL;
 
-	if (ibv_post_send(comm->rdma_ctx->qp[0],&wr,&bad_wr)) {
+	if (ibv_post_send(comm->rdma_ctx->qp[0],&wr,&bad_wr)) {/*发送此wr*/
 		fprintf(stderr, "Function ibv_post_send failed\n");
 		return 1;
 	}
 
 	do {
-		ne = ibv_poll_cq(comm->rdma_ctx->send_cq, 1,&wc);
+		ne = ibv_poll_cq(comm->rdma_ctx->send_cq, 1,&wc);/*取send CQ中的内容*/
 	} while (ne == 0);
 
 	//coverity[uninit_use]
@@ -506,7 +506,7 @@ static int rdma_read_keys(struct pingpong_dest *rem_dest/*出参，对端发送�
 	int ne;
 
 	do {
-		ne = ibv_poll_cq(comm->rdma_ctx->recv_cq,1,&wc);/*取cq中内容*/
+		ne = ibv_poll_cq(comm->rdma_ctx->recv_cq,1,&wc);/*取recv cq中内容*/
 	} while (ne == 0);
 
 	if (wc.status || !(wc.opcode & IBV_WC_RECV) || wc.wr_id != SYNC_SPEC_ID) {
@@ -1022,7 +1022,7 @@ int rdma_client_connect(struct pingpong_context *ctx,struct perftest_parameters 
 			return FAILURE;
 		}
 
-		/*读取kernel产生的event*/
+		/*地址解析完成,读取kernel产生的event*/
 		if (rdma_get_cm_event(ctx->cm_channel,&event)) {
 			fprintf(stderr, "rdma_get_cm_events failed\n");
 			return FAILURE;
@@ -1030,19 +1030,21 @@ int rdma_client_connect(struct pingpong_context *ctx,struct perftest_parameters 
 
 		//coverity[uninit_use]
 		if (event->event == RDMA_CM_EVENT_ADDR_ERROR) {
+			/*地址解析失败,重试次数减1,再尝试*/
 			num_of_retry--;
 			rdma_ack_cm_event(event);
 			continue;
 		}
 
 		if (event->event != RDMA_CM_EVENT_ADDR_RESOLVED) {
+			/*取得其它事件,这个事件不是我们预期的,返回失败*/
 			fprintf(stderr, "unexpected CM event %d\n",event->event);
 			rdma_ack_cm_event(event);
 			return FAILURE;
 		}
 
 		rdma_ack_cm_event(event);
-		break;
+		break;/*地址解析成功*/
 	}
 
 	if (user_param->tos != DEF_TOS) {
@@ -1072,24 +1074,27 @@ int rdma_client_connect(struct pingpong_context *ctx,struct perftest_parameters 
 			return FAILURE;
 		}
 
+		/*路由解析完成,读取kernel产生的event*/
 		if (rdma_get_cm_event(ctx->cm_channel,&event)) {
 			fprintf(stderr, "rdma_get_cm_events failed\n");
 			return FAILURE;
 		}
 
 		if (event->event == RDMA_CM_EVENT_ROUTE_ERROR) {
+			/*路由解析失败,重试次数减1,再尝试*/
 			num_of_retry--;
 			rdma_ack_cm_event(event);
 			continue;
 		}
 
 		if (event->event != RDMA_CM_EVENT_ROUTE_RESOLVED) {
+			/*取得其它事件,这个事件不是我们预期的,返回失败*/
 			fprintf(stderr, "unexpected CM event %d\n",event->event);
 			rdma_ack_cm_event(event);
 			return FAILURE;
 		}
 
-		rdma_ack_cm_event(event);
+		rdma_ack_cm_event(event);/*路由解析成功*/
 		break;
 	}
 
@@ -1366,13 +1371,13 @@ int create_comm_struct(struct perftest_comm *comm,
 	if (user_param->use_rdma_cm) {
 
 		MAIN_ALLOC(comm->rdma_ctx, struct pingpong_context, 1, free_rdma_params);
-		memset(comm->rdma_ctx, 0, sizeof(struct pingpong_context));
+		memset(comm->rdma_ctx, 0, sizeof(struct pingpong_context));/*初始化为0*/
 
-		comm->rdma_params->tx_depth = 1;
-		comm->rdma_params->rx_depth = 1;
-		comm->rdma_params->connection_type = RC;
-		comm->rdma_params->num_of_qps = 1;
-		comm->rdma_params->verb	= SEND;
+		comm->rdma_params->tx_depth = 1;/*TX队列深度为1*/
+		comm->rdma_params->rx_depth = 1;/*RX队列深度为1*/
+		comm->rdma_params->connection_type = RC;/*使用RC类型*/
+		comm->rdma_params->num_of_qps = 1;/*占用一个QP*/
+		comm->rdma_params->verb	= SEND;/*采用SEND方式*/
 		comm->rdma_params->size = sizeof(struct pingpong_dest);
 		comm->rdma_ctx->context = NULL;
 
@@ -1382,7 +1387,7 @@ int create_comm_struct(struct perftest_comm *comm,
 
 		MAIN_ALLOC(comm->rdma_ctx->mr, struct ibv_mr*, user_param->num_of_qps, free_memory_ctx);
 		MAIN_ALLOC(comm->rdma_ctx->buf, void* , user_param->num_of_qps, free_mr);
-		MAIN_ALLOC(comm->rdma_ctx->qp,struct ibv_qp*,comm->rdma_params->num_of_qps, free_buf);
+		MAIN_ALLOC(comm->rdma_ctx->qp,struct ibv_qp*,comm->rdma_params->num_of_qps, free_buf);/*申请QP占用的空间*/
 		#ifdef HAVE_IBV_WR_API
 		MAIN_ALLOC(comm->rdma_ctx->qpx,struct ibv_qp_ex*,comm->rdma_params->num_of_qps, free_qp);
 		#endif
@@ -2136,14 +2141,16 @@ int rdma_cm_get_rdma_address(struct perftest_parameters *user_param,
 	int rc;
 	char port[6] = "", error_message[ERROR_MSG_SIZE] = "";
 
-	sprintf(port, "%d", user_param->port);
+	sprintf(port, "%d", user_param->port);/*PORT转字符串*/
 	hints->ai_family = user_param->ai_family;
 	// if we have servername specified, it is a client, we should use server name
 	// if it is not specified, we should use explicit source_ip if possible
 	if ((NULL != user_param->servername) || (!user_param->has_source_ip)) {
+		/*客户端*/
 		rc = rdma_getaddrinfo(user_param->servername, port, hints, rai);
 	}
 	else {
+		/*服务端*/
 		rc = rdma_getaddrinfo(user_param->source_ip, port, hints, rai);
 	}
 
@@ -2396,6 +2403,7 @@ int rdma_cm_address_handler(struct pingpong_context *ctx,
 	char *error_message;
 
 	if (user_param->tos != DEF_TOS) {
+		/*设置tos*/
 		rc = rdma_set_option(cma_id, RDMA_OPTION_ID,
 			RDMA_OPTION_ID_TOS, &user_param->tos, sizeof(uint8_t));
 		if (rc) {
@@ -2407,6 +2415,7 @@ int rdma_cm_address_handler(struct pingpong_context *ctx,
 	}
 
 	if (user_param->connection_type == RC) {
+		/*设置qp超时时间*/
 		rc = rdma_set_option(cma_id, RDMA_OPTION_ID, RDMA_OPTION_ID_ACK_TIMEOUT,
 					&user_param->qp_timeout, sizeof(uint8_t));
 		if (rc) {
@@ -2416,7 +2425,7 @@ int rdma_cm_address_handler(struct pingpong_context *ctx,
 		}
 	}
 
-	rc = rdma_resolve_route(cma_id, 2000);
+	rc = rdma_resolve_route(cma_id, 2000);/*解决路由*/
 	if (rc) {
 		error_message = "Failed to resolve RDMA CM route.";
 		rdma_cm_connect_error(ctx);
@@ -2444,7 +2453,7 @@ int rdma_cm_route_handler(struct pingpong_context *ctx,
 
 	// Initialization of client contexts in case of first connection:
 	if (connection_index == 0) {
-		rc = ctx_init(ctx, user_param);
+		rc = ctx_init(ctx, user_param);/*初始化*/
 		if (rc) {
 			error_message = "Failed to initialize RDMA contexts.";
 			goto error;
@@ -2452,12 +2461,13 @@ int rdma_cm_route_handler(struct pingpong_context *ctx,
 	}
 
 	ctx->cm_id = cma_id;
-	rc = create_qp_main(ctx, user_param, connection_index);
+	rc = create_qp_main(ctx, user_param, connection_index);/*创建Qp*/
 	if (rc) {
 		error_message = "Failed to create QP.";
 		goto error;
 	}
 
+	/*准备连接参数*/
 	memset(&conn_param, 0, sizeof conn_param);
 
 	if (user_param->verb == READ || user_param->verb == ATOMIC) {
@@ -2465,12 +2475,12 @@ int rdma_cm_route_handler(struct pingpong_context *ctx,
 		conn_param.initiator_depth = user_param->out_reads;
 	}
 
-	conn_param.retry_count = user_param->retry_count;
-	conn_param.rnr_retry_count = user_param->retry_count;
-	conn_param.private_data = ctx->cma_master.rai->ai_connect;
-	conn_param.private_data_len = ctx->cma_master.rai->ai_connect_len;
+	conn_param.retry_count = user_param->retry_count;/*重试次数*/
+	conn_param.rnr_retry_count = user_param->retry_count;/*RNR重试次数*/
+	conn_param.private_data = ctx->cma_master.rai->ai_connect;/*私有地址*/
+	conn_param.private_data_len = ctx->cma_master.rai->ai_connect_len;/*私有地址长度*/
 
-	rc = rdma_connect(cma_id, &conn_param);
+	rc = rdma_connect(cma_id, &conn_param);/*向对端发送CM报文*/
 	if (rc) {
 		error_message = "Failed to connect through RDMA CM.";
 		goto error;
@@ -2654,11 +2664,11 @@ int rdma_cm_events_dispatcher(struct pingpong_context *ctx,
 	int rc = SUCCESS;
 
 	switch (event->event) {
-	case RDMA_CM_EVENT_ADDR_RESOLVED:
-		rc = rdma_cm_address_handler(ctx, user_param, cma_id);
+	case RDMA_CM_EVENT_ADDR_RESOLVED:/*地址解析成功*/
+		rc = rdma_cm_address_handler(ctx, user_param, cma_id);/*触发RESOLVE_ROUTE流程*/
 		break;
-	case RDMA_CM_EVENT_ROUTE_RESOLVED:
-		rc = rdma_cm_route_handler(ctx, user_param, cma_id);
+	case RDMA_CM_EVENT_ROUTE_RESOLVED:/*路由解析成功*/
+		rc = rdma_cm_route_handler(ctx, user_param, cma_id);/*创建qp*/
 		break;
 	case RDMA_CM_EVENT_CONNECT_REQUEST:
 		rc = rdma_cm_connection_request_handler(ctx, user_param, event, cma_id);
@@ -2671,7 +2681,7 @@ int rdma_cm_events_dispatcher(struct pingpong_context *ctx,
 	case RDMA_CM_EVENT_CONNECT_ERROR:
 	case RDMA_CM_EVENT_UNREACHABLE:
 	case RDMA_CM_EVENT_REJECTED:
-		/*错误event处理*/
+		/*错误event处理,显示错误*/
 		rc = rdma_cm_event_error_handler(ctx, event);
 		break;
 	case RDMA_CM_EVENT_DISCONNECTED:
@@ -2698,6 +2708,7 @@ int rdma_cm_connect_events(struct pingpong_context *ctx,
 	struct rdma_cm_event *event;
 
 	while (ctx->cma_master.connects_left) {
+		/*取得event(通过获取也将触发cma对event进行首先处理)*/
 		rc = rdma_get_cm_event(ctx->cma_master.channel, &event);
 		if (rc) {
 			error_message = "Failed to get RDMA CM event.";
@@ -2705,13 +2716,13 @@ int rdma_cm_connect_events(struct pingpong_context *ctx,
 		}
 
 		//coverity[uninit_use]
-		rc = rdma_cm_events_dispatcher(ctx, user_param, event->id, event);
+		rc = rdma_cm_events_dispatcher(ctx, user_param, event->id, event);/*按类型分发处理*/
 		if (rc) {
 			error_message = "Failed to handle RDMA CM event.";
 			goto ack;
 		}
 
-		rc = rdma_ack_cm_event(event);
+		rc = rdma_ack_cm_event(event);/*确认此cm事件已处理*/
 		if (rc) {
 			error_message = "Failed to ACK RDMA CM event after handling.";
 			goto error;
@@ -2857,11 +2868,12 @@ int _rdma_cm_client_connection(struct pingpong_context *ctx,
 	}
 
 	for (i = 0; i < user_param->num_of_qps; i++) {
-		/*解释地址*/
+		/*解析地址*/
 		rc = rdma_resolve_addr(ctx->cma_master.nodes[i].cma_id,
-			ctx->cma_master.rai->ai_src_addr,
-			ctx->cma_master.rai->ai_dst_addr, 2000);
+			ctx->cma_master.rai->ai_src_addr/*源地址*/,
+			ctx->cma_master.rai->ai_dst_addr/*目的地址*/, 2000);
 		if (rc) {
+			/*解析地址时出错*/
 			sprintf(error_message, "Failed to resolve RDMA CM address.");
 			rdma_cm_connect_error(ctx);
 			goto error;
@@ -2895,7 +2907,7 @@ int rdma_cm_client_connection(struct pingpong_context *ctx,
 			return rc;/*连接成功，返回*/
 		}
 
-		/*连接不成功，释放掉刚创建的cma_id*/
+		/*连接不成功，释放掉刚创建的cma_id(这里有个BUG,释放掉cma_id将导致下次循环时出CORE)*/
 		rc = rdma_cm_destroy_cma(ctx, user_param);
 		if (rc) {
 			sprintf(error_message, "Failed to destroy RDMA CM contexts.");
@@ -2932,6 +2944,7 @@ int create_rdma_cm_connection(struct pingpong_context *ctx,
 		goto error;
 	}
 
+	/*为每个QP创建rdma_cma_id*/
 	rc = rdma_cm_allocate_nodes(ctx, user_param, &hints);
 	if (rc) {
 		error_message = "Failed to allocate RDMA CM nodes.";
@@ -2960,6 +2973,7 @@ int create_rdma_cm_connection(struct pingpong_context *ctx,
 		goto destroy_event_channel;
 	}
 
+	/*client与server端互换信息(同时确保CLIENT与SERVER均运行至此处)*/
 	rc = ctx_hand_shake(comm, &my_dest[0], &rem_dest[0]);
 	if (rc) {
 		error_message = "Failed to sync between client and server "

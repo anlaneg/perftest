@@ -151,7 +151,7 @@
 
 /* Represents RDMA CM node with needed information */
 struct cma_node {
-	struct rdma_cm_id *cma_id;
+	struct rdma_cm_id *cma_id;/*对应的rdma_cm_id*/
 	uint32_t remote_qpn;
 	uint32_t remote_qkey;
 	int id;/*编号*/
@@ -191,7 +191,7 @@ struct pingpong_context {
 	struct ibv_cq				*recv_cq;/*接收用的cq*/
 	void					**buf;
 	struct ibv_ah				**ah;
-	struct ibv_qp				**qp;
+	struct ibv_qp				**qp;/*QP列表(支持多个,数量由rdma_params->num_of_qps控制)*/
 	#ifdef HAVE_IBV_WR_API
 	struct ibv_qp_ex			**qpx;
 	#ifdef HAVE_MLX5DV
